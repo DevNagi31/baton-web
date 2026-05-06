@@ -5,7 +5,7 @@ import { WebSocketServer, type WebSocket } from "ws";
 import { spawn as ptySpawn, type IPty } from "node-pty";
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
-import { listTree, readFileSafely, getDiff, getStatus } from "./api.js";
+import { listTree, readFileSafely, getDiff, getStatus, commitPush } from "./api.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -103,6 +103,21 @@ async function handleApi(
       sendJson(res, 200, r);
       return;
     }
+    if (url.pathname === "/api/commit-push") {
+      if (req.method !== "POST") {
+        sendJson(res, 405, { error: "method not allowed" });
+        return;
+      }
+      const body = await readJsonBody(req);
+      const message = typeof body?.message === "string" ? body.message : "";
+      if (!message.trim()) {
+        sendJson(res, 400, { error: "message required" });
+        return;
+      }
+      const result = await commitPush(PROJECT_ROOT, message);
+      sendJson(res, result.ok ? 200 : 200, result);
+      return;
+    }
     sendJson(res, 404, { error: "not found" });
   } catch (err) {
     const msg = (err as Error).message ?? "internal";
@@ -121,6 +136,26 @@ function sendJson(
     "cache-control": "no-store",
   });
   res.end(JSON.stringify(payload));
+}
+
+async function readJsonBody(
+  req: http.IncomingMessage,
+  capBytes = 1024 * 1024
+): Promise<Record<string, unknown> | null> {
+  const chunks: Buffer[] = [];
+  let total = 0;
+  for await (const chunk of req) {
+    const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    total += buf.length;
+    if (total > capBytes) throw new Error("body too large");
+    chunks.push(buf);
+  }
+  if (total === 0) return null;
+  try {
+    return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+  } catch {
+    return null;
+  }
 }
 
 const httpServer = http.createServer(async (req, res) => {

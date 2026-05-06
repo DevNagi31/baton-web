@@ -14,10 +14,20 @@ const PANEL_EL = document.getElementById("panel");
 const PANEL_CLOSE = document.getElementById("panel-close");
 const FILE_LIST = document.getElementById("file-list");
 const DIFF_VIEW = document.getElementById("diff-view");
+const COMMIT_MSG = document.getElementById("commit-msg");
+const COMMIT_BTN = document.getElementById("commit-btn");
+const COMMIT_STATUS = document.getElementById("commit-status");
+const VOICE_BTN = document.getElementById("voice-btn");
+const COMPOSE = document.getElementById("compose");
+const COMPOSE_TEXT = document.getElementById("compose-text");
+const COMPOSE_SEND = document.getElementById("compose-send");
+const COMPOSE_CANCEL = document.getElementById("compose-cancel");
+const COMPOSE_HINT = document.getElementById("compose-hint");
 
 let bearerToken = null;
 let activeFile = null;
 let pollHandle = null;
+let activeWs = null;
 
 const cached = sessionStorage.getItem("baton-web-token");
 if (cached) {
@@ -86,9 +96,11 @@ function connect(token) {
   ws.addEventListener("open", () => {
     sessionStorage.setItem("baton-web-token", token);
     bearerToken = token;
+    activeWs = ws;
     LOGIN_EL.style.display = "none";
     HEADER_EL.style.display = "flex";
     TERM_HOST.style.display = "block";
+    VOICE_BTN.style.display = SpeechRecognitionCtor() ? "flex" : "none";
     setStatus("connected", "connected");
     setTimeout(sendResize, 50);
     term.focus();
@@ -108,6 +120,8 @@ function connect(token) {
     setStatus(`offline (${e.code})`, "disconnected");
     term.write("\r\n\x1b[33m[baton-web] connection closed\x1b[0m\r\n");
     stopStatusPolling();
+    activeWs = null;
+    VOICE_BTN.style.display = "none";
   });
 
   ws.addEventListener("error", () => {
@@ -268,4 +282,152 @@ function escapeHtml(s) {
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
+}
+
+// ---------------------------------------------------------------------
+// Commit & push
+// ---------------------------------------------------------------------
+
+COMMIT_BTN.addEventListener("click", async () => {
+  const message = (COMMIT_MSG.value || "").trim();
+  if (!message) {
+    COMMIT_STATUS.textContent = "commit message required";
+    return;
+  }
+  COMMIT_BTN.disabled = true;
+  COMMIT_STATUS.textContent = "committing…";
+  try {
+    const res = await fetch("/api/commit-push", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${bearerToken}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ message }),
+    });
+    const body = await res.json();
+    const lines = (body.steps || []).map(
+      (s) => `[${s.exitCode === 0 ? "✓" : "✗"}] ${s.step}\n${s.output || "(no output)"}`
+    );
+    COMMIT_STATUS.textContent = lines.join("\n\n");
+    if (body.ok) {
+      COMMIT_MSG.value = "";
+      // Refresh tree + status; everything should be clean now
+      refreshStatus();
+      refreshTree();
+    }
+  } catch (e) {
+    COMMIT_STATUS.textContent = `error: ${e.message || e}`;
+  } finally {
+    COMMIT_BTN.disabled = false;
+  }
+});
+
+COMMIT_MSG.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") COMMIT_BTN.click();
+});
+
+// ---------------------------------------------------------------------
+// Voice input — Web Speech API (Chrome/Safari) → compose textarea
+// ---------------------------------------------------------------------
+
+function SpeechRecognitionCtor() {
+  return window.SpeechRecognition || window.webkitSpeechRecognition || null;
+}
+
+let recognition = null;
+let recognizing = false;
+
+VOICE_BTN.addEventListener("click", () => {
+  // Open compose if it isn't open
+  if (COMPOSE.style.display !== "flex") {
+    COMPOSE.style.display = "flex";
+    COMPOSE.setAttribute("aria-hidden", "false");
+    COMPOSE_TEXT.focus();
+  }
+  toggleDictation();
+});
+
+COMPOSE_CANCEL.addEventListener("click", () => {
+  stopDictation();
+  COMPOSE.style.display = "none";
+  COMPOSE.setAttribute("aria-hidden", "true");
+  COMPOSE_TEXT.value = "";
+});
+
+COMPOSE_SEND.addEventListener("click", () => {
+  const text = (COMPOSE_TEXT.value || "").trim();
+  if (!text) return;
+  if (!activeWs || activeWs.readyState !== WebSocket.OPEN) {
+    COMPOSE_HINT.textContent = "not connected — reconnect and try again";
+    return;
+  }
+  // Send to the PTY exactly as if the user typed it, then a newline
+  activeWs.send(JSON.stringify({ type: "input", data: text + "\r" }));
+  stopDictation();
+  COMPOSE.style.display = "none";
+  COMPOSE.setAttribute("aria-hidden", "true");
+  COMPOSE_TEXT.value = "";
+});
+
+function toggleDictation() {
+  if (recognizing) {
+    stopDictation();
+    return;
+  }
+  const Ctor = SpeechRecognitionCtor();
+  if (!Ctor) {
+    COMPOSE_HINT.textContent =
+      "speech recognition not available in this browser";
+    return;
+  }
+  recognition = new Ctor();
+  recognition.continuous = true;
+  recognition.interimResults = true;
+  recognition.lang = navigator.language || "en-US";
+
+  let baseline = COMPOSE_TEXT.value;
+
+  recognition.onstart = () => {
+    recognizing = true;
+    VOICE_BTN.classList.add("recording");
+    COMPOSE_HINT.textContent = "listening… tap mic again to stop";
+  };
+  recognition.onerror = (e) => {
+    COMPOSE_HINT.textContent = `dictation error: ${e.error || "unknown"}`;
+    stopDictation();
+  };
+  recognition.onend = () => {
+    recognizing = false;
+    VOICE_BTN.classList.remove("recording");
+    COMPOSE_HINT.textContent = "tap send to push to the terminal";
+  };
+  recognition.onresult = (e) => {
+    let interim = "";
+    let finalText = "";
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const r = e.results[i];
+      if (r.isFinal) finalText += r[0].transcript;
+      else interim += r[0].transcript;
+    }
+    if (finalText) {
+      baseline = (baseline + " " + finalText).trim();
+    }
+    COMPOSE_TEXT.value = (baseline + (interim ? " " + interim : "")).trim();
+  };
+  try {
+    recognition.start();
+  } catch (e) {
+    COMPOSE_HINT.textContent = `cannot start dictation: ${e.message || e}`;
+  }
+}
+
+function stopDictation() {
+  if (recognition && recognizing) {
+    try {
+      recognition.stop();
+    } catch {}
+  }
+  recognizing = false;
+  VOICE_BTN.classList.remove("recording");
 }

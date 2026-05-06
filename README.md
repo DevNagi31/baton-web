@@ -88,12 +88,17 @@ single-tenant; bad for shared use.
   - [ ] Voice input (mobile mic → speech-to-text → terminal stdin) —
         deferred to v0.3
   - [ ] One-click "git commit and push" — deferred to v0.3
-- **v0.3** — deploy story + nice-to-haves
-  - [ ] Voice input
-  - [ ] Commit & push button
-  - [ ] Dockerfile + docker-compose (run on a VPS)
-  - [ ] Tailscale Funnel docs (free HTTPS without DNS)
-  - [ ] Optional: Cloudflare Tunnel docs
+- **v0.3** — deploy story + nice-to-haves ✅ shipped
+  - [x] Voice input via Web Speech API → compose textarea → terminal
+  - [x] Commit & push button (POST /api/commit-push, surfaces each
+        step's exit code and output; gracefully reports "nothing to
+        commit" without looking broken)
+  - [x] Tailscale Funnel + Cloudflare Tunnel deploy guide
+        (see [DEPLOY.md](./DEPLOY.md))
+  - [ ] Dockerfile + docker-compose — deferred. The CLIs need their
+        own auth state (`~/.claude`, `~/.codex`, `~/.cursor`) so
+        containerizing them well is its own project. Run on bare Node
+        for now, see DEPLOY.md.
 - **v0.4** — baton integration
   - [ ] Side-panel button: "save this turn to baton memory"
   - [ ] Pre-mount baton-memory MCP server in the spawned shell so

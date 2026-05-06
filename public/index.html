@@ -169,6 +169,123 @@
       font-size: 12px;
       text-align: center;
     }
+    #panel .commit {
+      flex: 0 0 auto;
+      padding: 10px 12px;
+      border-top: 1px solid #1f1f1f;
+      background: #0a0a0a;
+      display: flex;
+      gap: 8px;
+    }
+    #panel .commit input {
+      flex: 1 1 auto;
+      min-width: 0;
+      padding: 8px 10px;
+      background: #1a1a1a;
+      color: var(--fg);
+      border: 1px solid #2a2a2a;
+      border-radius: 6px;
+      font: inherit;
+      font-size: 12px;
+    }
+    #panel .commit button {
+      flex: 0 0 auto;
+      padding: 8px 12px;
+      background: var(--accent);
+      color: white;
+      border: 0;
+      border-radius: 6px;
+      font: inherit;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    #panel .commit button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    #commit-status {
+      padding: 0 12px 12px;
+      font-family: ui-monospace, SFMono-Regular, monospace;
+      font-size: 11px;
+      color: #999;
+      max-height: 120px;
+      overflow: auto;
+      white-space: pre-wrap;
+    }
+
+    /* Voice compose overlay */
+    #voice-btn {
+      position: fixed;
+      right: 14px;
+      bottom: 14px;
+      width: 56px;
+      height: 56px;
+      background: var(--accent);
+      color: white;
+      border: 0;
+      border-radius: 50%;
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+      font-size: 22px;
+      cursor: pointer;
+      z-index: 4;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+    #voice-btn.recording {
+      background: var(--error);
+      animation: pulse 1.2s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 6px 18px rgba(239,68,68,0.6); }
+      50%      { box-shadow: 0 0 0 12px rgba(239,68,68,0.0); }
+    }
+    #compose {
+      position: fixed;
+      left: 0; right: 0; bottom: 0;
+      background: #0d0d0d;
+      border-top: 1px solid #222;
+      padding: 12px;
+      display: none;
+      flex-direction: column;
+      gap: 8px;
+      z-index: 6;
+    }
+    #compose textarea {
+      width: 100%;
+      min-height: 80px;
+      max-height: 35vh;
+      background: #1a1a1a;
+      color: var(--fg);
+      border: 1px solid #2a2a2a;
+      border-radius: 8px;
+      padding: 10px 12px;
+      font: inherit;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 13px;
+      resize: vertical;
+    }
+    #compose .row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    #compose button {
+      padding: 10px 14px;
+      border: 0;
+      border-radius: 8px;
+      font: inherit;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    #compose .send { background: var(--accent); color: white; flex: 1; }
+    #compose .cancel { background: #1a1a1a; color: var(--fg); border: 1px solid #2a2a2a; }
+    #compose .hint {
+      font-size: 11px;
+      color: #888;
+    }
     #term-host .xterm,
     #term-host .xterm-viewport,
     #term-host .xterm-screen {
@@ -262,7 +379,23 @@
         <div class="empty">tap a file to see its diff</div>
       </div>
     </div>
+    <div class="commit">
+      <input id="commit-msg" type="text" placeholder="commit message" autocomplete="off" />
+      <button id="commit-btn" type="button">commit & push</button>
+    </div>
+    <pre id="commit-status"></pre>
   </aside>
+
+  <button id="voice-btn" type="button" aria-label="voice input">🎙</button>
+
+  <div id="compose" aria-hidden="true">
+    <textarea id="compose-text" placeholder="speak or type a prompt — sent to the terminal as if you typed it" autocapitalize="off" spellcheck="false"></textarea>
+    <div class="row">
+      <button class="cancel" id="compose-cancel" type="button">cancel</button>
+      <button class="send" id="compose-send" type="button">send to terminal ↵</button>
+    </div>
+    <div class="hint" id="compose-hint">tap mic again to dictate; appended Enter on send</div>
+  </div>
 
   <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>

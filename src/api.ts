@@ -104,6 +104,64 @@ export async function readFileSafely(
   return { content: buf.toString("utf8"), bytes: s.size };
 }
 
+export type CommitPushResult = {
+  ok: boolean;
+  // Each step records what happened; even on success there may be a
+  // useful note (e.g. "nothing to commit").
+  steps: Array<{ step: string; exitCode: number; output: string }>;
+};
+
+export async function commitPush(
+  root: string,
+  message: string
+): Promise<CommitPushResult> {
+  if (!message.trim()) throw new Error("commit message required");
+  const steps: CommitPushResult["steps"] = [];
+
+  // 1. stage everything inside the project root
+  const add = await execa("git", ["add", "-A"], { cwd: root, reject: false });
+  steps.push({
+    step: "git add -A",
+    exitCode: add.exitCode ?? 1,
+    output: combine(add),
+  });
+  if (add.exitCode !== 0) return { ok: false, steps };
+
+  // 2. commit; if there's nothing to commit, surface that as a non-error
+  //    so the UI can say "nothing changed" instead of looking broken
+  const commit = await execa(
+    "git",
+    ["commit", "-m", message, "--no-verify"],
+    { cwd: root, reject: false }
+  );
+  const commitOutput = combine(commit);
+  steps.push({
+    step: "git commit",
+    exitCode: commit.exitCode ?? 1,
+    output: commitOutput,
+  });
+  if (commit.exitCode !== 0) {
+    const empty = /nothing to commit|no changes added/i.test(commitOutput);
+    return { ok: empty, steps };
+  }
+
+  // 3. push to whatever the current branch tracks
+  const push = await execa("git", ["push"], { cwd: root, reject: false });
+  steps.push({
+    step: "git push",
+    exitCode: push.exitCode ?? 1,
+    output: combine(push),
+  });
+  return { ok: push.exitCode === 0, steps };
+}
+
+function combine(r: { stdout: unknown; stderr: unknown }): string {
+  const out = String(r.stdout ?? "").trim();
+  const err = String(r.stderr ?? "").trim();
+  if (out && err) return `${out}\n${err}`;
+  return out || err;
+}
+
 export async function getDiff(
   root: string,
   relPath: string

@@ -5,6 +5,7 @@ import { WebSocketServer, type WebSocket } from "ws";
 import { spawn as ptySpawn, type IPty } from "node-pty";
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
+import { listTree, readFileSafely, getDiff, getStatus } from "./api.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -16,6 +17,11 @@ const TOKEN = process.env.BATON_WEB_TOKEN;
 const SHELL =
   process.env.BATON_WEB_SHELL ?? process.env.SHELL ?? "/bin/zsh";
 const STARTING_DIR = process.env.BATON_WEB_CWD ?? homedir();
+// Project root for the file/diff API. Defaults to the shell's starting
+// dir; the panel won't track `cd` inside the terminal until v0.3.
+const PROJECT_ROOT = pathResolve(
+  process.env.BATON_WEB_PROJECT ?? STARTING_DIR
+);
 
 if (!TOKEN) {
   console.error(
@@ -42,8 +48,89 @@ const MIME: Record<string, string> = {
   ".png": "image/png",
 };
 
+function unauthorized(res: http.ServerResponse): void {
+  res.writeHead(401, { "content-type": "application/json" });
+  res.end(JSON.stringify({ error: "unauthorized" }));
+}
+
+function checkApiAuth(req: http.IncomingMessage, url: URL): boolean {
+  // Accept token via Authorization: Bearer <token> (preferred) or
+  // ?token=... (fallback for fetch-without-headers in the browser).
+  const auth = req.headers.authorization ?? "";
+  if (auth.startsWith("Bearer ")) {
+    return auth.slice("Bearer ".length) === TOKEN;
+  }
+  return url.searchParams.get("token") === TOKEN;
+}
+
+async function handleApi(
+  url: URL,
+  req: http.IncomingMessage,
+  res: http.ServerResponse
+): Promise<void> {
+  if (!checkApiAuth(req, url)) {
+    unauthorized(res);
+    return;
+  }
+  try {
+    if (url.pathname === "/api/status") {
+      const status = await getStatus(PROJECT_ROOT);
+      sendJson(res, 200, { status });
+      return;
+    }
+    if (url.pathname === "/api/tree") {
+      const tree = await listTree(PROJECT_ROOT);
+      sendJson(res, 200, { tree });
+      return;
+    }
+    if (url.pathname === "/api/file") {
+      const path = url.searchParams.get("path") ?? "";
+      if (!path) {
+        sendJson(res, 400, { error: "path required" });
+        return;
+      }
+      const r = await readFileSafely(PROJECT_ROOT, path);
+      sendJson(res, 200, r);
+      return;
+    }
+    if (url.pathname === "/api/diff") {
+      const path = url.searchParams.get("path") ?? "";
+      if (!path) {
+        sendJson(res, 400, { error: "path required" });
+        return;
+      }
+      const r = await getDiff(PROJECT_ROOT, path);
+      sendJson(res, 200, r);
+      return;
+    }
+    sendJson(res, 404, { error: "not found" });
+  } catch (err) {
+    const msg = (err as Error).message ?? "internal";
+    const status = msg === "path-traversal" ? 403 : 500;
+    sendJson(res, status, { error: msg });
+  }
+}
+
+function sendJson(
+  res: http.ServerResponse,
+  status: number,
+  payload: unknown
+): void {
+  res.writeHead(status, {
+    "content-type": "application/json",
+    "cache-control": "no-store",
+  });
+  res.end(JSON.stringify(payload));
+}
+
 const httpServer = http.createServer(async (req, res) => {
   const url = new URL(req.url ?? "/", `http://${req.headers.host}`);
+
+  if (url.pathname.startsWith("/api/")) {
+    await handleApi(url, req, res);
+    return;
+  }
+
   let path = url.pathname === "/" ? "/index.html" : url.pathname;
 
   // Prevent path traversal: resolve absolute paths and require the
@@ -151,7 +238,8 @@ wss.on("connection", (ws: WebSocket) => {
 
 httpServer.listen(PORT, BIND, () => {
   console.log(`[baton-web] listening on http://${BIND}:${PORT}`);
-  console.log(`[baton-web] shell: ${SHELL}`);
-  console.log(`[baton-web] cwd:   ${STARTING_DIR}`);
+  console.log(`[baton-web] shell:   ${SHELL}`);
+  console.log(`[baton-web] cwd:     ${STARTING_DIR}`);
+  console.log(`[baton-web] project: ${PROJECT_ROOT}`);
 });
 

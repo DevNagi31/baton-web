@@ -70,16 +70,27 @@ single-tenant; bad for shared use.
 
 ## Roadmap (small)
 
-- **v0.1** — single-user, password auth, raw terminal
-  - [ ] Node + ws + node-pty + xterm.js skeleton
-  - [ ] Mobile-friendly viewport (CSS, soft keyboard sizing)
-  - [ ] Bearer-token auth via `BATON_WEB_TOKEN`
-  - [ ] Survives connection drops (reattach to existing PTY)
-- **v0.2** — quality-of-life
-  - [ ] File tree + diff side panel
-  - [ ] Voice input (mobile mic → speech-to-text → terminal stdin)
-  - [ ] One-click "git commit and push" so changes land on GitHub
-- **v0.3** — deploy story
+- **v0.1** — single-user, password auth, raw terminal ✅ shipped
+  - [x] Node + ws + node-pty + xterm.js skeleton
+  - [x] Mobile-friendly viewport (CSS, soft keyboard sizing)
+  - [x] Bearer-token auth via `BATON_WEB_TOKEN`
+  - [ ] Survives connection drops (reattach to existing PTY) — deferred
+- **v0.2** — file tree + diff panel ✅ shipped
+  - [x] Slide-in side panel reachable from a header button
+  - [x] File list with status badges (M/A/D/R/?) for changed files
+  - [x] Diff view showing `git diff HEAD` per file
+  - [x] Untracked files synthesize an "all additions" diff
+  - [x] `/api/status`, `/api/tree`, `/api/file`, `/api/diff` HTTP
+        endpoints under the same bearer-token auth
+  - [x] Path-traversal protected on every endpoint
+  - [x] Auto-poll status every 4s; tree refreshes when panel is open;
+        the header "files" button shows a dot when anything is dirty
+  - [ ] Voice input (mobile mic → speech-to-text → terminal stdin) —
+        deferred to v0.3
+  - [ ] One-click "git commit and push" — deferred to v0.3
+- **v0.3** — deploy story + nice-to-haves
+  - [ ] Voice input
+  - [ ] Commit & push button
   - [ ] Dockerfile + docker-compose (run on a VPS)
   - [ ] Tailscale Funnel docs (free HTTPS without DNS)
   - [ ] Optional: Cloudflare Tunnel docs

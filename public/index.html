@@ -49,11 +49,125 @@
     }
     header .status.connected { color: #4ade80; }
     header .status.disconnected { color: var(--error); }
+    header .files-btn {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      background: #1a1a1a;
+      color: var(--fg);
+      border: 1px solid #2a2a2a;
+      border-radius: 6px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    header .files-btn .dot {
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      background: var(--accent);
+      border-radius: 50%;
+      visibility: hidden;
+    }
+    header .files-btn.dirty .dot { visibility: visible; }
     #term-host {
       flex: 1 1 auto;
       min-height: 0;
       padding: 4px;
       background: var(--bg);
+    }
+    #panel {
+      position: fixed;
+      top: 0;
+      bottom: 0;
+      right: 0;
+      width: min(420px, 92vw);
+      background: #0d0d0d;
+      border-left: 1px solid #222;
+      display: flex;
+      flex-direction: column;
+      transform: translateX(100%);
+      transition: transform 0.18s ease;
+      z-index: 5;
+    }
+    #panel.open { transform: translateX(0); }
+    #panel header {
+      flex: 0 0 auto;
+      padding: 10px 12px;
+      border-bottom: 1px solid #222;
+      background: #111;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    #panel header span { font-weight: 600; font-size: 13px; letter-spacing: 0.02em; }
+    #panel header button {
+      background: transparent;
+      border: 0;
+      color: var(--fg);
+      font-size: 18px;
+      line-height: 1;
+      cursor: pointer;
+      padding: 4px 8px;
+    }
+    #panel .body {
+      flex: 1 1 auto;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    #panel .files {
+      flex: 0 0 auto;
+      max-height: 50%;
+      overflow: auto;
+      border-bottom: 1px solid #1f1f1f;
+    }
+    #panel .file-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      border-bottom: 1px solid #161616;
+      cursor: pointer;
+      font-size: 12px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    #panel .file-row:hover { background: #161616; }
+    #panel .file-row.active { background: #1c1c1c; color: white; }
+    #panel .file-row .badge {
+      display: inline-block;
+      width: 18px;
+      text-align: center;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 1px 0;
+      border-radius: 3px;
+    }
+    #panel .file-row .badge.M { background: #1e3a8a; color: #93c5fd; }
+    #panel .file-row .badge.A,
+    #panel .file-row .badge\\? { background: #14532d; color: #86efac; }
+    #panel .file-row .badge.D { background: #7f1d1d; color: #fca5a5; }
+    #panel .file-row .badge.R { background: #581c87; color: #d8b4fe; }
+    #panel .file-row .badge.empty { background: transparent; color: #555; }
+    #panel .diff {
+      flex: 1 1 auto;
+      overflow: auto;
+      padding: 12px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 11px;
+      line-height: 1.45;
+      white-space: pre;
+    }
+    #panel .diff .add { color: #86efac; background: rgba(34, 197, 94, 0.07); }
+    #panel .diff .del { color: #fca5a5; background: rgba(239, 68, 68, 0.07); }
+    #panel .diff .hunk { color: #93c5fd; }
+    #panel .diff .meta { color: #777; }
+    #panel .empty {
+      padding: 24px 16px;
+      color: #666;
+      font-size: 12px;
+      text-align: center;
     }
     #term-host .xterm,
     #term-host .xterm-viewport,
@@ -129,8 +243,26 @@
   <header style="display:none">
     <span class="title">baton-web</span>
     <span class="status disconnected" id="status">offline</span>
+    <button class="files-btn" id="files-btn" type="button">
+      <span class="dot"></span>
+      <span>files</span>
+    </button>
   </header>
   <div id="term-host" style="display:none"></div>
+  <aside id="panel" aria-hidden="true">
+    <header>
+      <span>files & diffs</span>
+      <button id="panel-close" aria-label="close">×</button>
+    </header>
+    <div class="body">
+      <div class="files" id="file-list">
+        <div class="empty">loading…</div>
+      </div>
+      <div class="diff" id="diff-view">
+        <div class="empty">tap a file to see its diff</div>
+      </div>
+    </div>
+  </aside>
 
   <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>

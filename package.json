@@ -1,0 +1,41 @@
+{
+  "name": "baton-web",
+  "version": "0.0.1",
+  "description": "Self-hosted web terminal that lets you vibe-code with Claude, Codex, or Cursor from your phone.",
+  "type": "module",
+  "bin": {
+    "baton-web": "./dist/server.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/server.ts",
+    "start": "node dist/server.js",
+    "test": "vitest run",
+    "lint": "eslint src --ext .ts"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "keywords": [
+    "ai",
+    "agent",
+    "terminal",
+    "claude",
+    "cursor",
+    "codex",
+    "vibe-coding",
+    "remote-development"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "node-pty": "^1.0.0",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "@types/ws": "^8.5.13",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3",
+    "vitest": "^2.1.8"
+  }
+}

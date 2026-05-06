@@ -99,10 +99,17 @@ single-tenant; bad for shared use.
         own auth state (`~/.claude`, `~/.codex`, `~/.cursor`) so
         containerizing them well is its own project. Run on bare Node
         for now, see DEPLOY.md.
-- **v0.4** — baton integration
-  - [ ] Side-panel button: "save this turn to baton memory"
-  - [ ] Pre-mount baton-memory MCP server in the spawned shell so
-        agents share semantic memory across sessions
+- **v0.4** — baton integration ✅ shipped
+  - [x] Side-panel button "save to memory" backed by `POST /api/remember`
+        which shells to `BATON_BIN remember` (button hidden when
+        BATON_BIN is unset or not invokable)
+  - [x] `/api/baton-status` reports configured/available so the UI can
+        show or hide the button without flicker
+  - [x] [MCP.md](./MCP.md) explains how to wire baton-memory's MCP
+        server into Claude Code / Codex / Cursor so agents read & write
+        the same semantic memory across sessions. Auto-config of those
+        files is deliberately not done — copy-pasting is the right
+        boundary so baton-web isn't silently editing user dotfiles.
 
 ## Why ~/.baton-web/ instead of a per-project dir
 

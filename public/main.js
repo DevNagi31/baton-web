@@ -105,6 +105,7 @@ function connect(token) {
     setTimeout(sendResize, 50);
     term.focus();
     startStatusPolling();
+    probeBatonAvailability();
   });
 
   ws.addEventListener("message", (e) => {
@@ -283,6 +284,78 @@ function escapeHtml(s) {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
 }
+
+// ---------------------------------------------------------------------
+// Baton memory integration (v0.4)
+// ---------------------------------------------------------------------
+
+const REMEMBER_BTN = document.getElementById("remember-btn");
+const REMEMBER_OVERLAY = document.getElementById("remember-overlay");
+const REMEMBER_TEXT = document.getElementById("remember-text");
+const REMEMBER_TAGS = document.getElementById("remember-tags");
+const REMEMBER_SAVE = document.getElementById("remember-save");
+const REMEMBER_CANCEL = document.getElementById("remember-cancel");
+const REMEMBER_RESULT = document.getElementById("remember-result");
+
+async function probeBatonAvailability() {
+  try {
+    const r = await api("/api/baton-status");
+    if (r.available) {
+      REMEMBER_BTN.style.display = "inline-flex";
+    }
+  } catch {
+    // ignore — keep the button hidden
+  }
+}
+
+REMEMBER_BTN.addEventListener("click", () => {
+  REMEMBER_OVERLAY.style.display = "flex";
+  REMEMBER_TEXT.value = "";
+  REMEMBER_TAGS.value = "";
+  REMEMBER_RESULT.textContent = "";
+  setTimeout(() => REMEMBER_TEXT.focus(), 50);
+});
+
+REMEMBER_CANCEL.addEventListener("click", () => {
+  REMEMBER_OVERLAY.style.display = "none";
+});
+
+REMEMBER_SAVE.addEventListener("click", async () => {
+  const text = (REMEMBER_TEXT.value || "").trim();
+  if (!text) {
+    REMEMBER_RESULT.textContent = "note required";
+    return;
+  }
+  const tagInput = (REMEMBER_TAGS.value || "").trim();
+  const tags = tagInput
+    ? tagInput.split(",").map((t) => t.trim()).filter(Boolean)
+    : undefined;
+  REMEMBER_SAVE.disabled = true;
+  REMEMBER_RESULT.textContent = "saving…";
+  try {
+    const res = await fetch("/api/remember", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${bearerToken}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ text, tags }),
+    });
+    const body = await res.json();
+    if (body.ok) {
+      const idLabel = body.id != null ? `id=${body.id}` : "";
+      REMEMBER_RESULT.textContent = `saved ${idLabel}`;
+      setTimeout(() => (REMEMBER_OVERLAY.style.display = "none"), 700);
+    } else {
+      REMEMBER_RESULT.textContent = body.output || body.error || "failed";
+    }
+  } catch (e) {
+    REMEMBER_RESULT.textContent = `error: ${e.message || e}`;
+  } finally {
+    REMEMBER_SAVE.disabled = false;
+  }
+});
+
 
 // ---------------------------------------------------------------------
 // Commit & push

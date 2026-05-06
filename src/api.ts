@@ -162,6 +162,53 @@ function combine(r: { stdout: unknown; stderr: unknown }): string {
   return out || err;
 }
 
+export type RememberResult = {
+  ok: boolean;
+  // The id of the persisted memory if available (parsed out of baton's
+  // stdout). Falls back to null when baton's output format changes.
+  id: number | null;
+  output: string;
+};
+
+export async function rememberNote(
+  batonBin: string,
+  text: string,
+  opts: { tags?: string[]; project?: string | null } = {}
+): Promise<RememberResult> {
+  if (!text.trim()) throw new Error("note text is empty");
+  const args = ["remember", text];
+  if (opts.tags && opts.tags.length) {
+    args.push("--tags", opts.tags.join(","));
+  }
+  if (opts.project) {
+    args.push("--project", opts.project);
+  }
+  // BATON_BIN may be a path to a script (e.g. "node /path/dist/cli/index.js")
+  // — split on whitespace so the env var can include args. shell-quoting
+  // is the user's responsibility; we don't pass user input through shell.
+  const [cmd, ...prefixArgs] = batonBin.split(/\s+/).filter(Boolean);
+  if (!cmd) throw new Error("BATON_BIN not configured");
+  const r = await execa(cmd, [...prefixArgs, ...args], { reject: false });
+  const out = (String(r.stdout) + "\n" + String(r.stderr)).trim();
+  const idMatch = out.match(/id=(\d+)/);
+  return {
+    ok: r.exitCode === 0,
+    id: idMatch ? Number(idMatch[1]) : null,
+    output: out,
+  };
+}
+
+export async function probeBaton(batonBin: string): Promise<boolean> {
+  try {
+    const [cmd, ...prefixArgs] = batonBin.split(/\s+/).filter(Boolean);
+    if (!cmd) return false;
+    const r = await execa(cmd, [...prefixArgs, "--version"], { reject: false });
+    return r.exitCode === 0;
+  } catch {
+    return false;
+  }
+}
+
 export async function getDiff(
   root: string,
   relPath: string

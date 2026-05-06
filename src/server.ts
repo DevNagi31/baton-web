@@ -5,7 +5,15 @@ import { WebSocketServer, type WebSocket } from "ws";
 import { spawn as ptySpawn, type IPty } from "node-pty";
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
-import { listTree, readFileSafely, getDiff, getStatus, commitPush } from "./api.js";
+import {
+  listTree,
+  readFileSafely,
+  getDiff,
+  getStatus,
+  commitPush,
+  rememberNote,
+  probeBaton,
+} from "./api.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -22,6 +30,10 @@ const STARTING_DIR = process.env.BATON_WEB_CWD ?? homedir();
 const PROJECT_ROOT = pathResolve(
   process.env.BATON_WEB_PROJECT ?? STARTING_DIR
 );
+// Path to the baton CLI for the optional /api/remember endpoint. May
+// include args (e.g. "node /home/dev/baton/dist/cli/index.js"). When
+// unset, the "save to memory" button stays hidden in the UI.
+const BATON_BIN = process.env.BATON_BIN ?? "";
 
 if (!TOKEN) {
   console.error(
@@ -115,6 +127,42 @@ async function handleApi(
         return;
       }
       const result = await commitPush(PROJECT_ROOT, message);
+      sendJson(res, result.ok ? 200 : 200, result);
+      return;
+    }
+    if (url.pathname === "/api/baton-status") {
+      const available = BATON_BIN
+        ? await probeBaton(BATON_BIN)
+        : false;
+      sendJson(res, 200, { available, configured: BATON_BIN.length > 0 });
+      return;
+    }
+    if (url.pathname === "/api/remember") {
+      if (req.method !== "POST") {
+        sendJson(res, 405, { error: "method not allowed" });
+        return;
+      }
+      if (!BATON_BIN) {
+        sendJson(res, 503, {
+          error: "baton integration not configured (set BATON_BIN env var)",
+        });
+        return;
+      }
+      const body = await readJsonBody(req);
+      const text = typeof body?.text === "string" ? body.text : "";
+      if (!text.trim()) {
+        sendJson(res, 400, { error: "text required" });
+        return;
+      }
+      const tags = Array.isArray(body?.tags)
+        ? (body.tags as unknown[]).filter((t): t is string => typeof t === "string")
+        : [];
+      const project =
+        typeof body?.project === "string" ? (body.project as string) : null;
+      const result = await rememberNote(BATON_BIN, text, {
+        tags: tags.length ? tags : undefined,
+        project: project,
+      });
       sendJson(res, result.ok ? 200 : 200, result);
       return;
     }
@@ -276,5 +324,10 @@ httpServer.listen(PORT, BIND, () => {
   console.log(`[baton-web] shell:   ${SHELL}`);
   console.log(`[baton-web] cwd:     ${STARTING_DIR}`);
   console.log(`[baton-web] project: ${PROJECT_ROOT}`);
+  if (BATON_BIN) {
+    console.log(`[baton-web] baton:   ${BATON_BIN}`);
+  } else {
+    console.log(`[baton-web] baton:   (set BATON_BIN to enable memory save)`);
+  }
 });
 

@@ -369,7 +369,12 @@
   <aside id="panel" aria-hidden="true">
     <header>
       <span>files & diffs</span>
-      <button id="panel-close" aria-label="close">×</button>
+      <span style="display:flex;gap:6px;align-items:center">
+        <button id="remember-btn" class="files-btn" type="button" style="display:none" title="save a note to baton memory">
+          <span>💾 memory</span>
+        </button>
+        <button id="panel-close" aria-label="close">×</button>
+      </span>
     </header>
     <div class="body">
       <div class="files" id="file-list">
@@ -387,6 +392,19 @@
   </aside>
 
   <button id="voice-btn" type="button" aria-label="voice input">🎙</button>
+
+  <div id="remember-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:7;align-items:center;justify-content:center;padding:20px;flex-direction:column;gap:10px;">
+    <div style="background:#0d0d0d;border:1px solid #222;border-radius:10px;padding:14px;max-width:480px;width:100%;display:flex;flex-direction:column;gap:8px;">
+      <div style="font-weight:600;font-size:13px;letter-spacing:0.02em">save to baton memory</div>
+      <textarea id="remember-text" rows="4" placeholder="checkpoint note (e.g. decided to use sqlite over pgvector)" style="background:#1a1a1a;color:var(--fg);border:1px solid #2a2a2a;border-radius:6px;padding:10px;font:inherit;font-size:13px;resize:vertical"></textarea>
+      <input id="remember-tags" type="text" placeholder="tags (comma-separated, optional)" style="background:#1a1a1a;color:var(--fg);border:1px solid #2a2a2a;border-radius:6px;padding:8px 10px;font:inherit;font-size:12px" />
+      <div style="display:flex;gap:8px;align-items:center">
+        <button id="remember-cancel" style="flex:1;padding:10px;background:#1a1a1a;color:var(--fg);border:1px solid #2a2a2a;border-radius:6px;font:inherit;font-weight:600;cursor:pointer">cancel</button>
+        <button id="remember-save" style="flex:1;padding:10px;background:var(--accent);color:white;border:0;border-radius:6px;font:inherit;font-weight:600;cursor:pointer">save</button>
+      </div>
+      <div id="remember-result" style="font-family:ui-monospace,monospace;font-size:11px;color:#999;min-height:14px"></div>
+    </div>
+  </div>
 
   <div id="compose" aria-hidden="true">
     <textarea id="compose-text" placeholder="speak or type a prompt — sent to the terminal as if you typed it" autocapitalize="off" spellcheck="false"></textarea>

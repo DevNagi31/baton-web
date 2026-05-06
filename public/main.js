@@ -3,7 +3,7 @@
 // across browser restarts.
 
 const STATUS_EL = document.getElementById("status");
-const HEADER_EL = document.querySelector("header");
+const WINDOW_EL = document.getElementById("window");
 const TERM_HOST = document.getElementById("term-host");
 const LOGIN_EL = document.getElementById("login");
 const TOKEN_INPUT = document.getElementById("token");
@@ -51,8 +51,8 @@ TOKEN_INPUT.addEventListener("keydown", (e) => {
 
 function setStatus(label, kind) {
   STATUS_EL.textContent = label;
-  STATUS_EL.classList.remove("connected", "disconnected");
-  STATUS_EL.classList.add(kind);
+  STATUS_EL.classList.remove("online", "offline");
+  STATUS_EL.classList.add(kind === "connected" ? "online" : "offline");
 }
 
 function connect(token) {
@@ -70,13 +70,31 @@ function connect(token) {
   const term = new Terminal({
     cursorBlink: true,
     fontFamily:
-      'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+      '"SF Mono", ui-monospace, Menlo, Monaco, Consolas, monospace',
     fontSize: 13,
+    lineHeight: 1.2,
     theme: {
-      background: "#0a0a0a",
-      foreground: "#f5f5f5",
-      cursor: "#6366f1",
-      selectionBackground: "#3b3b3b",
+      background: "#1e1e1e",
+      foreground: "#ebebf0",
+      cursor: "#ebebf0",
+      cursorAccent: "#1e1e1e",
+      selectionBackground: "#3a3a3c",
+      black: "#1e1e1e",
+      red: "#ff6e67",
+      green: "#28c840",
+      yellow: "#febc2e",
+      blue: "#0a84ff",
+      magenta: "#bf5af2",
+      cyan: "#64d2ff",
+      white: "#dadadc",
+      brightBlack: "#5e5e63",
+      brightRed: "#ff8b85",
+      brightGreen: "#4ad271",
+      brightYellow: "#ffcb53",
+      brightBlue: "#64a8ff",
+      brightMagenta: "#d3a3ff",
+      brightCyan: "#92e1ff",
+      brightWhite: "#ffffff",
     },
     scrollback: 5000,
   });
@@ -98,8 +116,7 @@ function connect(token) {
     bearerToken = token;
     activeWs = ws;
     LOGIN_EL.style.display = "none";
-    HEADER_EL.style.display = "flex";
-    TERM_HOST.style.display = "block";
+    WINDOW_EL.style.display = "flex";
     VOICE_BTN.style.display = SpeechRecognitionCtor() ? "flex" : "none";
     setStatus("connected", "connected");
     setTimeout(sendResize, 50);

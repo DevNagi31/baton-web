@@ -6,111 +6,328 @@
     name="viewport"
     content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
   />
-  <meta name="theme-color" content="#0a0a0a" />
-  <title>baton-web</title>
+  <meta name="theme-color" content="#1e1e1e" media="(prefers-color-scheme: dark)" />
+  <meta name="theme-color" content="#f5f5f7" media="(prefers-color-scheme: light)" />
+  <title>baton-web — terminal</title>
   <link
     rel="stylesheet"
     href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css"
   />
   <style>
     :root {
-      color-scheme: dark;
-      --bg: #0a0a0a;
-      --fg: #f5f5f5;
-      --accent: #6366f1;
-      --error: #ef4444;
+      /* macOS window chrome (light) */
+      --desktop-bg: #f5f5f7;
+      --titlebar-bg: linear-gradient(180deg, #ebebeb 0%, #d6d6d6 100%);
+      --titlebar-border: #b8b8b8;
+      --titlebar-text: #333;
+      --window-shadow: 0 16px 48px rgba(0, 0, 0, 0.18), 0 4px 12px rgba(0, 0, 0, 0.08);
+
+      /* Terminal interior (always dark, like Terminal.app default) */
+      --terminal-bg: #1e1e1e;
+      --terminal-fg: #ebebf0;
+      --terminal-muted: #8e8e93;
+      --terminal-border: #2c2c2e;
+
+      /* Surfaces */
+      --panel-bg: #1c1c1e;
+      --panel-border: #2c2c2e;
+      --row-hover: #2c2c2e;
+      --row-active: #3a3a3c;
+
+      /* Accents */
+      --accent: #007AFF;
+      --accent-strong: #0A84FF;
+      --green: #28C840;
+      --yellow: #FEBC2E;
+      --red: #FF5F57;
+
+      /* Diff colors */
+      --diff-add-fg: #b6f0c2;
+      --diff-add-bg: rgba(48, 209, 88, 0.10);
+      --diff-del-fg: #ffb4ae;
+      --diff-del-bg: rgba(255, 69, 58, 0.10);
+      --diff-hunk: #64d2ff;
+      --diff-meta: #98989d;
     }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --desktop-bg: #000;
+        --titlebar-bg: linear-gradient(180deg, #3a3a3c 0%, #2c2c2e 100%);
+        --titlebar-border: #1c1c1e;
+        --titlebar-text: #ebebf0;
+        --window-shadow: 0 24px 64px rgba(0, 0, 0, 0.6), 0 6px 16px rgba(0, 0, 0, 0.3);
+      }
+    }
+
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body { height: 100%; background: var(--bg); color: var(--fg); }
+    html, body { height: 100%; }
     body {
+      font: 13px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", system-ui, sans-serif;
+      color: var(--terminal-fg);
+      background: var(--desktop-bg);
+      overflow: hidden;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    /* ----- macOS window chrome (desktop) ----- */
+    #window {
+      position: fixed;
+      inset: 24px;
+      max-width: 1200px;
+      margin: 0 auto;
+      background: var(--terminal-bg);
+      border-radius: 10px;
+      box-shadow: var(--window-shadow);
       display: flex;
       flex-direction: column;
-      font: 14px/1.4 -apple-system, system-ui, sans-serif;
       overflow: hidden;
+      border: 1px solid var(--titlebar-border);
     }
-    header {
+    @media (max-width: 720px) {
+      /* On phones, drop the chrome and go full-screen */
+      #window {
+        inset: 0;
+        border-radius: 0;
+        border: 0;
+        box-shadow: none;
+        max-width: none;
+      }
+    }
+
+    .titlebar {
       flex: 0 0 auto;
+      height: 28px;
+      background: var(--titlebar-bg);
+      border-bottom: 1px solid var(--titlebar-border);
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      padding: 8px 12px;
-      background: #111;
-      border-bottom: 1px solid #222;
-      font-size: 12px;
-    }
-    header .title {
-      font-weight: 600;
-      letter-spacing: 0.04em;
-    }
-    header .status {
-      font-family: ui-monospace, SFMono-Regular, monospace;
-      font-size: 11px;
-      color: #999;
-    }
-    header .status.connected { color: #4ade80; }
-    header .status.disconnected { color: var(--error); }
-    header .files-btn {
+      padding: 0 12px;
       position: relative;
+      user-select: none;
+      -webkit-app-region: drag;
+    }
+    .titlebar .lights {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .titlebar .light {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      border: 0;
+      padding: 0;
+      cursor: default;
+      position: relative;
+    }
+    .titlebar .light.red    { background: var(--red); }
+    .titlebar .light.yellow { background: var(--yellow); }
+    .titlebar .light.green  { background: var(--green); }
+    .titlebar .title {
+      position: absolute;
+      left: 0; right: 0;
+      text-align: center;
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: -0.01em;
+      color: var(--titlebar-text);
+      pointer-events: none;
+    }
+    .titlebar .right {
+      margin-left: auto;
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      -webkit-app-region: no-drag;
+    }
+    .titlebar .chip {
+      font: 11px/1 ui-monospace, "SF Mono", Menlo, monospace;
+      padding: 3px 8px;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.07);
+      color: var(--titlebar-text);
+      opacity: 0.78;
+    }
+    .titlebar .chip.online { color: #28C840; }
+    .titlebar .chip.offline { color: #FF5F57; }
+    .titlebar .iconbtn {
+      -webkit-app-region: no-drag;
+      background: transparent;
+      border: 0;
+      color: var(--titlebar-text);
+      width: 22px;
+      height: 22px;
+      border-radius: 4px;
+      cursor: pointer;
       display: inline-flex;
       align-items: center;
-      gap: 6px;
-      padding: 4px 10px;
-      background: #1a1a1a;
-      color: var(--fg);
-      border: 1px solid #2a2a2a;
-      border-radius: 6px;
-      font-size: 12px;
-      cursor: pointer;
+      justify-content: center;
+      font-size: 13px;
+      opacity: 0.75;
     }
-    header .files-btn .dot {
-      display: inline-block;
+    .titlebar .iconbtn:hover { background: rgba(0,0,0,0.08); opacity: 1; }
+    .titlebar .iconbtn.dirty::after {
+      content: "";
+      position: absolute;
       width: 6px;
       height: 6px;
-      background: var(--accent);
       border-radius: 50%;
-      visibility: hidden;
+      background: var(--accent);
+      transform: translate(8px, -8px);
     }
-    header .files-btn.dirty .dot { visibility: visible; }
+
+    @media (max-width: 720px) {
+      .titlebar .lights { display: none; }
+      .titlebar .title { text-align: left; left: 12px; right: 96px; }
+    }
+
+    /* ----- Terminal ----- */
     #term-host {
       flex: 1 1 auto;
       min-height: 0;
-      padding: 4px;
-      background: var(--bg);
+      padding: 8px 6px 6px;
+      background: var(--terminal-bg);
     }
-    #panel {
+    #term-host .xterm,
+    #term-host .xterm-viewport,
+    #term-host .xterm-screen {
+      height: 100% !important;
+      width: 100% !important;
+    }
+
+    /* ----- Login ----- */
+    #login {
       position: fixed;
-      top: 0;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      align-items: center;
+      justify-content: center;
+      background: var(--desktop-bg);
+      padding: 20px;
+      z-index: 10;
+    }
+    #login .card {
+      max-width: 380px;
+      width: 100%;
+      background: var(--terminal-bg);
+      border: 1px solid var(--terminal-border);
+      border-radius: 10px;
+      box-shadow: var(--window-shadow);
+      overflow: hidden;
+    }
+    #login .card-titlebar {
+      height: 24px;
+      background: var(--titlebar-bg);
+      border-bottom: 1px solid var(--titlebar-border);
+      display: flex;
+      align-items: center;
+      padding: 0 10px;
+    }
+    #login .card-titlebar .lights { display: flex; gap: 6px; }
+    #login .card-titlebar .light {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+    #login .card-titlebar .light.red    { background: var(--red); }
+    #login .card-titlebar .light.yellow { background: var(--yellow); }
+    #login .card-titlebar .light.green  { background: var(--green); }
+    #login .card-body {
+      padding: 24px 22px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      color: var(--terminal-fg);
+    }
+    #login h1 {
+      font-size: 16px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+    #login p {
+      font-size: 12px;
+      color: var(--terminal-muted);
+      line-height: 1.5;
+    }
+    #login input {
+      padding: 8px 10px;
+      background: rgba(255,255,255,0.05);
+      color: var(--terminal-fg);
+      border: 1px solid var(--terminal-border);
+      border-radius: 6px;
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      font-size: 12px;
+    }
+    #login input:focus {
+      outline: 2px solid var(--accent);
+      outline-offset: -1px;
+      border-color: var(--accent);
+    }
+    #login button {
+      padding: 8px 12px;
+      background: var(--accent);
+      color: white;
+      border: 0;
+      border-radius: 6px;
+      font: inherit;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    #login button:hover { background: var(--accent-strong); }
+    #login .err {
+      color: var(--red);
+      font-size: 11px;
+      min-height: 14px;
+    }
+
+    /* ----- Files & diff panel ----- */
+    #panel {
+      position: absolute;
+      top: 28px;
       bottom: 0;
       right: 0;
       width: min(420px, 92vw);
-      background: #0d0d0d;
-      border-left: 1px solid #222;
+      background: var(--panel-bg);
+      border-left: 1px solid var(--panel-border);
       display: flex;
       flex-direction: column;
       transform: translateX(100%);
-      transition: transform 0.18s ease;
+      transition: transform 0.16s ease;
       z-index: 5;
+    }
+    @media (max-width: 720px) {
+      #panel { top: 0; }
     }
     #panel.open { transform: translateX(0); }
     #panel header {
       flex: 0 0 auto;
-      padding: 10px 12px;
-      border-bottom: 1px solid #222;
-      background: #111;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--panel-border);
       display: flex;
       align-items: center;
       justify-content: space-between;
+      background: rgba(0,0,0,0.15);
     }
-    #panel header span { font-weight: 600; font-size: 13px; letter-spacing: 0.02em; }
+    #panel header .label {
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+    #panel header .right { display: flex; gap: 4px; align-items: center; }
     #panel header button {
       background: transparent;
       border: 0;
-      color: var(--fg);
-      font-size: 18px;
-      line-height: 1;
-      cursor: pointer;
+      color: var(--terminal-fg);
       padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      cursor: pointer;
+      opacity: 0.75;
     }
+    #panel header button:hover { background: rgba(255,255,255,0.06); opacity: 1; }
     #panel .body {
       flex: 1 1 auto;
       min-height: 0;
@@ -121,150 +338,165 @@
       flex: 0 0 auto;
       max-height: 50%;
       overflow: auto;
-      border-bottom: 1px solid #1f1f1f;
+      border-bottom: 1px solid var(--panel-border);
     }
     #panel .file-row {
       display: flex;
       align-items: center;
       gap: 8px;
       padding: 6px 12px;
-      border-bottom: 1px solid #161616;
       cursor: pointer;
       font-size: 12px;
-      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      color: var(--terminal-fg);
     }
-    #panel .file-row:hover { background: #161616; }
-    #panel .file-row.active { background: #1c1c1c; color: white; }
-    #panel .file-row .badge {
+    #panel .file-row:hover { background: var(--row-hover); }
+    #panel .file-row.active { background: var(--row-active); }
+    #panel .badge {
       display: inline-block;
-      width: 18px;
+      width: 16px;
       text-align: center;
       font-size: 10px;
-      font-weight: 700;
+      font-weight: 600;
       padding: 1px 0;
       border-radius: 3px;
     }
-    #panel .file-row .badge.M { background: #1e3a8a; color: #93c5fd; }
-    #panel .file-row .badge.A,
-    #panel .file-row .badge\\? { background: #14532d; color: #86efac; }
-    #panel .file-row .badge.D { background: #7f1d1d; color: #fca5a5; }
-    #panel .file-row .badge.R { background: #581c87; color: #d8b4fe; }
-    #panel .file-row .badge.empty { background: transparent; color: #555; }
+    #panel .badge.M { background: rgba(10, 132, 255, 0.18); color: #64a8ff; }
+    #panel .badge.A,
+    #panel .badge\\? { background: rgba(48, 209, 88, 0.18); color: #4ad271; }
+    #panel .badge.D { background: rgba(255, 69, 58, 0.18); color: #ff8a82; }
+    #panel .badge.R { background: rgba(191, 90, 242, 0.18); color: #d3a3ff; }
+    #panel .badge.empty { background: transparent; color: var(--terminal-muted); }
     #panel .diff {
       flex: 1 1 auto;
       overflow: auto;
       padding: 12px;
-      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
       font-size: 11px;
-      line-height: 1.45;
+      line-height: 1.5;
       white-space: pre;
     }
-    #panel .diff .add { color: #86efac; background: rgba(34, 197, 94, 0.07); }
-    #panel .diff .del { color: #fca5a5; background: rgba(239, 68, 68, 0.07); }
-    #panel .diff .hunk { color: #93c5fd; }
-    #panel .diff .meta { color: #777; }
+    #panel .diff .add { color: var(--diff-add-fg); background: var(--diff-add-bg); }
+    #panel .diff .del { color: var(--diff-del-fg); background: var(--diff-del-bg); }
+    #panel .diff .hunk { color: var(--diff-hunk); }
+    #panel .diff .meta { color: var(--diff-meta); }
     #panel .empty {
       padding: 24px 16px;
-      color: #666;
+      color: var(--terminal-muted);
       font-size: 12px;
       text-align: center;
     }
     #panel .commit {
       flex: 0 0 auto;
       padding: 10px 12px;
-      border-top: 1px solid #1f1f1f;
-      background: #0a0a0a;
+      border-top: 1px solid var(--panel-border);
       display: flex;
       gap: 8px;
     }
     #panel .commit input {
       flex: 1 1 auto;
       min-width: 0;
-      padding: 8px 10px;
-      background: #1a1a1a;
-      color: var(--fg);
-      border: 1px solid #2a2a2a;
-      border-radius: 6px;
+      padding: 6px 10px;
+      background: rgba(255,255,255,0.04);
+      color: var(--terminal-fg);
+      border: 1px solid var(--panel-border);
+      border-radius: 5px;
       font: inherit;
       font-size: 12px;
+    }
+    #panel .commit input:focus {
+      outline: 1.5px solid var(--accent);
+      border-color: var(--accent);
     }
     #panel .commit button {
       flex: 0 0 auto;
-      padding: 8px 12px;
+      padding: 6px 12px;
       background: var(--accent);
       color: white;
       border: 0;
-      border-radius: 6px;
+      border-radius: 5px;
       font: inherit;
       font-size: 12px;
-      font-weight: 600;
+      font-weight: 500;
       cursor: pointer;
     }
-    #panel .commit button:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
+    #panel .commit button:hover { background: var(--accent-strong); }
+    #panel .commit button:disabled { opacity: 0.5; cursor: not-allowed; }
     #commit-status {
       padding: 0 12px 12px;
-      font-family: ui-monospace, SFMono-Regular, monospace;
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
       font-size: 11px;
-      color: #999;
+      color: var(--terminal-muted);
       max-height: 120px;
       overflow: auto;
       white-space: pre-wrap;
     }
 
-    /* Voice compose overlay */
+    /* ----- Voice / compose overlay ----- */
     #voice-btn {
       position: fixed;
-      right: 14px;
-      bottom: 14px;
-      width: 56px;
-      height: 56px;
+      right: 36px;
+      bottom: 36px;
+      width: 48px;
+      height: 48px;
       background: var(--accent);
       color: white;
       border: 0;
       border-radius: 50%;
-      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
-      font-size: 22px;
+      box-shadow: 0 8px 20px rgba(0, 122, 255, 0.35);
       cursor: pointer;
       z-index: 4;
       display: none;
       align-items: center;
       justify-content: center;
+      font-size: 18px;
     }
+    @media (max-width: 720px) {
+      #voice-btn { right: 16px; bottom: 16px; }
+    }
+    #voice-btn:hover { background: var(--accent-strong); }
     #voice-btn.recording {
-      background: var(--error);
+      background: var(--red);
       animation: pulse 1.2s ease-in-out infinite;
     }
     @keyframes pulse {
-      0%, 100% { box-shadow: 0 6px 18px rgba(239,68,68,0.6); }
-      50%      { box-shadow: 0 0 0 12px rgba(239,68,68,0.0); }
+      0%, 100% { box-shadow: 0 8px 20px rgba(255, 95, 87, 0.55); }
+      50%      { box-shadow: 0 0 0 14px rgba(255, 95, 87, 0); }
     }
     #compose {
       position: fixed;
-      left: 0; right: 0; bottom: 0;
-      background: #0d0d0d;
-      border-top: 1px solid #222;
+      left: 24px; right: 24px; bottom: 24px;
+      max-width: 720px;
+      margin: 0 auto;
+      background: var(--terminal-bg);
+      border: 1px solid var(--terminal-border);
+      border-radius: 10px;
+      box-shadow: var(--window-shadow);
       padding: 12px;
       display: none;
       flex-direction: column;
       gap: 8px;
       z-index: 6;
     }
+    @media (max-width: 720px) {
+      #compose { left: 8px; right: 8px; bottom: 8px; }
+    }
     #compose textarea {
       width: 100%;
       min-height: 80px;
       max-height: 35vh;
-      background: #1a1a1a;
-      color: var(--fg);
-      border: 1px solid #2a2a2a;
-      border-radius: 8px;
-      padding: 10px 12px;
-      font: inherit;
-      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      background: rgba(255,255,255,0.04);
+      color: var(--terminal-fg);
+      border: 1px solid var(--terminal-border);
+      border-radius: 6px;
+      padding: 8px 10px;
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
       font-size: 13px;
       resize: vertical;
+    }
+    #compose textarea:focus {
+      outline: 1.5px solid var(--accent);
+      border-color: var(--accent);
     }
     #compose .row {
       display: flex;
@@ -272,140 +504,166 @@
       align-items: center;
     }
     #compose button {
-      padding: 10px 14px;
+      padding: 8px 12px;
       border: 0;
-      border-radius: 8px;
+      border-radius: 6px;
       font: inherit;
-      font-size: 13px;
-      font-weight: 600;
+      font-size: 12px;
+      font-weight: 500;
       cursor: pointer;
     }
     #compose .send { background: var(--accent); color: white; flex: 1; }
-    #compose .cancel { background: #1a1a1a; color: var(--fg); border: 1px solid #2a2a2a; }
+    #compose .send:hover { background: var(--accent-strong); }
+    #compose .cancel {
+      background: rgba(255,255,255,0.06);
+      color: var(--terminal-fg);
+      border: 1px solid var(--terminal-border);
+    }
     #compose .hint {
       font-size: 11px;
-      color: #888;
+      color: var(--terminal-muted);
     }
-    #term-host .xterm,
-    #term-host .xterm-viewport,
-    #term-host .xterm-screen {
-      height: 100% !important;
-      width: 100% !important;
-    }
-    #login {
+
+    /* ----- Remember overlay ----- */
+    #remember-overlay {
       position: fixed;
       inset: 0;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
+      background: rgba(0, 0, 0, 0.55);
+      display: none;
       align-items: center;
       justify-content: center;
-      background: var(--bg);
       padding: 20px;
-      z-index: 10;
+      z-index: 7;
     }
-    #login h1 {
-      font-size: 18px;
-      font-weight: 600;
-      letter-spacing: 0.02em;
+    #remember-overlay .card {
+      max-width: 440px;
+      width: 100%;
+      background: var(--terminal-bg);
+      border: 1px solid var(--terminal-border);
+      border-radius: 10px;
+      box-shadow: var(--window-shadow);
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      color: var(--terminal-fg);
     }
-    #login p {
-      max-width: 320px;
+    #remember-overlay .card h2 {
       font-size: 13px;
-      color: #aaa;
-      text-align: center;
+      font-weight: 600;
+      letter-spacing: -0.01em;
     }
-    #login input {
-      width: 320px;
-      max-width: 90vw;
-      padding: 12px 14px;
-      background: #1a1a1a;
-      color: var(--fg);
-      border: 1px solid #333;
-      border-radius: 8px;
-      font: inherit;
-      font-family: ui-monospace, SFMono-Regular, monospace;
+    #remember-overlay textarea,
+    #remember-overlay input {
+      background: rgba(255,255,255,0.04);
+      color: var(--terminal-fg);
+      border: 1px solid var(--terminal-border);
+      border-radius: 6px;
+      padding: 8px 10px;
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      font-size: 12px;
+      resize: vertical;
     }
-    #login input:focus {
-      outline: 2px solid var(--accent);
+    #remember-overlay textarea { min-height: 80px; }
+    #remember-overlay textarea:focus,
+    #remember-overlay input:focus {
+      outline: 1.5px solid var(--accent);
       border-color: var(--accent);
     }
-    #login button {
-      width: 320px;
-      max-width: 90vw;
-      padding: 12px 14px;
-      background: var(--accent);
-      color: white;
-      border: 0;
-      border-radius: 8px;
-      font: inherit;
-      font-weight: 600;
-      cursor: pointer;
+    #remember-overlay .row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
     }
-    #login .err {
-      color: var(--error);
+    #remember-overlay button {
+      padding: 8px 12px;
+      border: 0;
+      border-radius: 6px;
+      font: inherit;
       font-size: 12px;
-      min-height: 16px;
+      font-weight: 500;
+      cursor: pointer;
+      flex: 1;
+    }
+    #remember-overlay button.cancel {
+      background: rgba(255,255,255,0.06);
+      color: var(--terminal-fg);
+      border: 1px solid var(--terminal-border);
+    }
+    #remember-overlay button.save { background: var(--accent); color: white; }
+    #remember-overlay button.save:hover { background: var(--accent-strong); }
+    #remember-result {
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      font-size: 11px;
+      color: var(--terminal-muted);
+      min-height: 14px;
     }
   </style>
 </head>
 <body>
+  <!-- Login -->
   <div id="login">
-    <h1>baton-web</h1>
-    <p>Enter the bearer token configured on the server (BATON_WEB_TOKEN).</p>
-    <input id="token" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="bearer token" />
-    <button id="connect">Connect</button>
-    <div id="login-err" class="err"></div>
-  </div>
-  <header style="display:none">
-    <span class="title">baton-web</span>
-    <span class="status disconnected" id="status">offline</span>
-    <button class="files-btn" id="files-btn" type="button">
-      <span class="dot"></span>
-      <span>files</span>
-    </button>
-  </header>
-  <div id="term-host" style="display:none"></div>
-  <aside id="panel" aria-hidden="true">
-    <header>
-      <span>files & diffs</span>
-      <span style="display:flex;gap:6px;align-items:center">
-        <button id="remember-btn" class="files-btn" type="button" style="display:none" title="save a note to baton memory">
-          <span>💾 memory</span>
-        </button>
-        <button id="panel-close" aria-label="close">×</button>
-      </span>
-    </header>
-    <div class="body">
-      <div class="files" id="file-list">
-        <div class="empty">loading…</div>
+    <div class="card">
+      <div class="card-titlebar">
+        <div class="lights">
+          <span class="light red"></span>
+          <span class="light yellow"></span>
+          <span class="light green"></span>
+        </div>
       </div>
-      <div class="diff" id="diff-view">
-        <div class="empty">tap a file to see its diff</div>
+      <div class="card-body">
+        <h1>baton-web</h1>
+        <p>Enter the bearer token configured on the server (BATON_WEB_TOKEN).</p>
+        <input id="token" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="bearer token" />
+        <button id="connect">Connect</button>
+        <div id="login-err" class="err"></div>
       </div>
-    </div>
-    <div class="commit">
-      <input id="commit-msg" type="text" placeholder="commit message" autocomplete="off" />
-      <button id="commit-btn" type="button">commit & push</button>
-    </div>
-    <pre id="commit-status"></pre>
-  </aside>
-
-  <button id="voice-btn" type="button" aria-label="voice input">🎙</button>
-
-  <div id="remember-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:7;align-items:center;justify-content:center;padding:20px;flex-direction:column;gap:10px;">
-    <div style="background:#0d0d0d;border:1px solid #222;border-radius:10px;padding:14px;max-width:480px;width:100%;display:flex;flex-direction:column;gap:8px;">
-      <div style="font-weight:600;font-size:13px;letter-spacing:0.02em">save to baton memory</div>
-      <textarea id="remember-text" rows="4" placeholder="checkpoint note (e.g. decided to use sqlite over pgvector)" style="background:#1a1a1a;color:var(--fg);border:1px solid #2a2a2a;border-radius:6px;padding:10px;font:inherit;font-size:13px;resize:vertical"></textarea>
-      <input id="remember-tags" type="text" placeholder="tags (comma-separated, optional)" style="background:#1a1a1a;color:var(--fg);border:1px solid #2a2a2a;border-radius:6px;padding:8px 10px;font:inherit;font-size:12px" />
-      <div style="display:flex;gap:8px;align-items:center">
-        <button id="remember-cancel" style="flex:1;padding:10px;background:#1a1a1a;color:var(--fg);border:1px solid #2a2a2a;border-radius:6px;font:inherit;font-weight:600;cursor:pointer">cancel</button>
-        <button id="remember-save" style="flex:1;padding:10px;background:var(--accent);color:white;border:0;border-radius:6px;font:inherit;font-weight:600;cursor:pointer">save</button>
-      </div>
-      <div id="remember-result" style="font-family:ui-monospace,monospace;font-size:11px;color:#999;min-height:14px"></div>
     </div>
   </div>
 
+  <!-- Window chrome + terminal -->
+  <div id="window" style="display:none">
+    <div class="titlebar">
+      <div class="lights">
+        <span class="light red"></span>
+        <span class="light yellow"></span>
+        <span class="light green"></span>
+      </div>
+      <div class="title" id="window-title">baton-web — zsh</div>
+      <div class="right">
+        <span class="chip" id="status">offline</span>
+        <button class="iconbtn" id="files-btn" type="button" title="files">⌘</button>
+        <button class="iconbtn" id="remember-btn" type="button" title="save to memory" style="display:none">○</button>
+      </div>
+    </div>
+    <div id="term-host"></div>
+
+    <!-- Files panel -->
+    <aside id="panel" aria-hidden="true">
+      <header>
+        <span class="label">files & diffs</span>
+        <span class="right">
+          <button id="panel-close" type="button" aria-label="close">close</button>
+        </span>
+      </header>
+      <div class="body">
+        <div class="files" id="file-list">
+          <div class="empty">loading…</div>
+        </div>
+        <div class="diff" id="diff-view">
+          <div class="empty">tap a file to see its diff</div>
+        </div>
+      </div>
+      <div class="commit">
+        <input id="commit-msg" type="text" placeholder="commit message" autocomplete="off" />
+        <button id="commit-btn" type="button">commit & push</button>
+      </div>
+      <pre id="commit-status"></pre>
+    </aside>
+  </div>
+
+  <!-- Voice / compose -->
+  <button id="voice-btn" type="button" aria-label="voice input">●</button>
   <div id="compose" aria-hidden="true">
     <textarea id="compose-text" placeholder="speak or type a prompt — sent to the terminal as if you typed it" autocapitalize="off" spellcheck="false"></textarea>
     <div class="row">
@@ -413,6 +671,20 @@
       <button class="send" id="compose-send" type="button">send to terminal ↵</button>
     </div>
     <div class="hint" id="compose-hint">tap mic again to dictate; appended Enter on send</div>
+  </div>
+
+  <!-- Save to memory -->
+  <div id="remember-overlay" aria-hidden="true">
+    <div class="card">
+      <h2>Save to baton memory</h2>
+      <textarea id="remember-text" placeholder="checkpoint note (e.g. decided to use sqlite over pgvector)"></textarea>
+      <input id="remember-tags" type="text" placeholder="tags (comma-separated, optional)" />
+      <div class="row">
+        <button class="cancel" id="remember-cancel" type="button">Cancel</button>
+        <button class="save" id="remember-save" type="button">Save</button>
+      </div>
+      <div id="remember-result"></div>
+    </div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
